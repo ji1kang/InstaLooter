@@ -10,6 +10,7 @@ import itertools
 import math
 import time
 import typing
+from random import randint
 
 import six
 from requests import Session
@@ -35,7 +36,7 @@ class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
     """
 
     PAGE_SIZE = 50
-    INTERVAL = 2
+    INTERVAL = randint(3, 10)
 
     _BASE_URL = "https://www.instagram.com/graphql/query/"
     _section_generic = NotImplemented    # type: Text
@@ -130,9 +131,10 @@ class CommentIterator(PageIterator):
     _section_media = "edge_media_to_parent_comment"
     _first = 12 # the number of displayed comments
 
-    def __init__(self, code, session, rhx):
+    def __init__(self, code, session, rhx, section_media):
         super(CommentIterator, self).__init__(session, rhx)
         self.code = code
+        self._section_media = section_media
 
     def _getparams(self, cursor):
         return {
