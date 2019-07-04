@@ -14,6 +14,7 @@ import threading
 import time
 import typing
 import warnings
+import os
 
 import fs
 import six
@@ -819,7 +820,7 @@ class PostLooter(InstaLooter):
 
         return CommentIterator(self.code, self.session, self.rhx)
 
-    def comment_download(self, dump_json=True):
+    def comment_download(self, dump_json=True, destination=None):
         comments_queued = deque()
         comments_iter = self.comment_pages()
 
@@ -835,7 +836,13 @@ class PostLooter(InstaLooter):
 
         if dump_json:
             mode = "w" if six.PY3 else "wb"
-            with open("{}.json".format(self.code), mode) as dest:
+
+            if destination:
+                filepath = os.path.join(destination, "{}.json".format(self.code))
+            else:
+                filepath = "{}.json".format(self.code)
+
+            with open(filepath, mode) as dest:
                 self.info['edge_media_to_parent_comment']['edges'] = list(comments_queued)
                 json.dump(self.info, dest, indent=4, sort_keys=True)
         else:
