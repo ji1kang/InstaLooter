@@ -25,6 +25,7 @@ __all__ = [
     "PageIterator",
     "HashtagIterator",
     "ProfileIterator",
+    "CommentIterator",
 ]
 
 
@@ -120,13 +121,14 @@ class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
 
 
 class CommentIterator(PageIterator):
-    """An iterator over the pages refering to a specific hashtag.
+    """An iterator over the comments of the post.
     """
 
     _QUERY_HASH = "97b41c52301f77ce508f55e66d17620e"
     _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
     _section_generic = "shortcode_media"
     _section_media = "edge_media_to_parent_comment"
+    _first = 12 # the number of displayed comments
 
     def __init__(self, code, session, rhx):
         super(CommentIterator, self).__init__(session, rhx)
@@ -135,13 +137,15 @@ class CommentIterator(PageIterator):
     def _getparams(self, cursor):
         return {
             "shortcode": self.code,
-            "first": 12,
+            "first": self._first,
             "after": cursor
         }
 
     def __next__(self):
         data = super(CommentIterator, self).__next__()
-        return data['edges']
+        comments = data[self._section_media]['edges']
+        self._first = len(comments)
+        return comments
 
     if six.PY2:
         next = __next__

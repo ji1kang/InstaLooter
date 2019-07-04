@@ -18,6 +18,7 @@ import warnings
 import fs
 import six
 from requests import Session
+from collections import deque
 from six.moves.queue import Queue
 from six.moves.http_cookiejar import FileCookieJar, LWPCookieJar
 
@@ -27,7 +28,7 @@ from ._uadetect import get_user_agent
 from ._utils import NameGenerator, CachedClassProperty, get_shared_data
 from .medias import TimedMediasIterator, MediasIterator
 from .pages import ProfileIterator, HashtagIterator, CommentIterator
-from .pbar import ProgressBar
+from .pbar import ProgressBar, TqdmProgressBar
 from .worker import InstaDownloader
 
 if typing.TYPE_CHECKING:
@@ -792,21 +793,53 @@ class PostLooter(InstaLooter):
         return self._info
 
     def pages(self):
-        # type: () -> Iterator[Dict[Text, Any]]
-        """Return a generator that yields a page with only the refered post.
+            # type: () -> Iterator[Dict[Text, Any]]
+            """Return a generator that yields a page with only the refered post.
+            Yields:
+                dict: a page dictionary with only a single media.
+            """
+            yield {"edge_owner_to_timeline_media": {
+                "count": 1,
+                "page_info": {
+                    "has_next_page": False,
+                    "end_cursor": None,
+                },
+                "edges": [
+                    {"node": self.info}
+                ],
+            }}
 
-        Yields:
-            dict: a page dictionary with only a single media.
+    def comment_pages(self):
+        # type: () -> CommentIterator
+        """Obtain a comment iterator over Instagram post pages.
 
-
-        page_info = self._info['edge_media_to_parent_comment']['page_info']
-        has_next_page = page_info['has_next_page']
-        end_cursor = page_info['end_cursor']
-
-        return self.get_post_info(self.code, params = {'shortcode' : self.code, 'first' : 12, 'after' : end_cursor})
+        Returns:
+            CommentIterator: an iterator over the comments of the instagram post pages.
         """
 
         return CommentIterator(self.code, self.session, self.rhx)
+
+    def comment_download(self, dump_json=True):
+        comments_queued = deque()
+        comments_iter = self.comment_pages()
+
+        pbar = TqdmProgressBar(comments_iter)
+        #pbar.set_maximum(self.info['edge_media_to_parent_comment']['count'] // len(self.info['edge_media_to_parent_comment']['edges']) + 1)
+        pbar.set_maximum(self.info['edge_media_to_parent_comment']['count'])
+
+        for nodes in comments_iter:
+            comments_queued.extend(nodes)
+            pbar.update(len(nodes))
+
+        pbar.finish()
+
+        if dump_json:
+            mode = "w" if six.PY3 else "wb"
+            with open("{}.json".format(self.code), mode) as dest:
+                self.info['edge_media_to_parent_comment']['edges'] = list(comments_queued)
+                json.dump(self.info, dest, indent=4, sort_keys=True)
+        else:
+            return comments_queued
 
     def medias(self, timeframe=None):
         """Return a generator that yields only the refered post.
