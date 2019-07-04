@@ -119,6 +119,34 @@ class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
         next = __next__
 
 
+class CommentIterator(PageIterator):
+    """An iterator over the pages refering to a specific hashtag.
+    """
+
+    _QUERY_HASH = "97b41c52301f77ce508f55e66d17620e"
+    _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
+    _section_generic = "shortcode_media"
+    _section_media = "edge_media_to_parent_comment"
+
+    def __init__(self, code, session, rhx):
+        super(CommentIterator, self).__init__(session, rhx)
+        self.code = code
+
+    def _getparams(self, cursor):
+        return {
+            "shortcode": self.code,
+            "first": 12,
+            "after": cursor
+        }
+
+    def __next__(self):
+        data = super(CommentIterator, self).__next__()
+        return data['edges']
+
+    if six.PY2:
+        next = __next__
+
+
 class HashtagIterator(PageIterator):
     """An iterator over the pages refering to a specific hashtag.
     """

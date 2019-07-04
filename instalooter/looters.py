@@ -26,7 +26,7 @@ from ._impl import length_hint, json
 from ._uadetect import get_user_agent
 from ._utils import NameGenerator, CachedClassProperty, get_shared_data
 from .medias import TimedMediasIterator, MediasIterator
-from .pages import ProfileIterator, HashtagIterator
+from .pages import ProfileIterator, HashtagIterator, CommentIterator
 from .pbar import ProgressBar
 from .worker import InstaDownloader
 
@@ -330,7 +330,7 @@ class InstaLooter(object):
         """
         return self._medias(self.pages(), timeframe)
 
-    def get_post_info(self, code):
+    def get_post_info(self, code, **kwargs):
         # type: (str) -> dict
         """Get media information from a given post code.
 
@@ -339,12 +339,14 @@ class InstaLooter(object):
                 from the ``shortcode`` attribute of media dictionaries, or
                 from a post URL: ``https://www.instagram.com/p/<code>/``)
 
+            **kwargs (dict) : parameters to request the next page
+
         Returns:
             dict: a media dictionaries, in the format used by Instagram.
 
         """
         url = "https://www.instagram.com/p/{}/".format(code)
-        with self.session.get(url) as res:
+        with self.session.get(url, **kwargs) as res:
             data = get_shared_data(res.text)
             return data['entry_data']['PostPage'][0]['graphql']['shortcode_media']
 
@@ -780,12 +782,13 @@ class PostLooter(InstaLooter):
             raise ValueError("invalid post code: '{}'".format(code))
         else:
             self.code = code
+            self._pagenum = 0
 
     @property
-    def info(self):
+    def info(self, **kwargs):
         # type: () -> dict
         if self._info is None:
-            self._info = self.get_post_info(self.code)
+            self._info = self.get_post_info(self.code, **kwargs)
         return self._info
 
     def pages(self):
@@ -795,17 +798,15 @@ class PostLooter(InstaLooter):
         Yields:
             dict: a page dictionary with only a single media.
 
+
+        page_info = self._info['edge_media_to_parent_comment']['page_info']
+        has_next_page = page_info['has_next_page']
+        end_cursor = page_info['end_cursor']
+
+        return self.get_post_info(self.code, params = {'shortcode' : self.code, 'first' : 12, 'after' : end_cursor})
         """
-        yield {"edge_owner_to_timeline_media": {
-            "count": 1,
-            "page_info": {
-                "has_next_page": False,
-                "end_cursor": None,
-            },
-            "edges": [
-                {"node": self.info}
-            ],
-        }}
+
+        return CommentIterator(self.code, self.session, self.rhx)
 
     def medias(self, timeframe=None):
         """Return a generator that yields only the refered post.
