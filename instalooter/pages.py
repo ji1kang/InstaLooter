@@ -143,7 +143,7 @@ class CommentIterator(PageIterator):
         #print(self._first)
         return {
             "shortcode": self.code,
-            "first": self._first,
+            "first": self.PAGE_SIZE,
             "after": cursor
         }
 
