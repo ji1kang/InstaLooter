@@ -810,10 +810,12 @@ class PostLooter(InstaLooter):
                 mode = "r" if six.PY3 else "rb"
                 with open(self._fpath, mode) as dest:
                     self._info = json.load(dest)
+                self._has_continue_page = self._info[self._section_media]['page_info']['has_next_page']
                 logging.info("{}: Countinue collecting".format(self.code))
             # type: () -> dict
             else:
                 self._continue = False
+                self._has_continue_page = False
                 self._info = self.get_post_info(self.code, **kwargs)
                 logging.info("{}: Start collecting".format(self.code))
 
@@ -850,8 +852,8 @@ class PostLooter(InstaLooter):
         Returns:
             CommentIterator: an iterator over the comments of the instagram post pages.
         """
-        if self._continue and (self._info[self._section_media]['page_info']['has_next_page']):
-            self._continue = False
+        if self._has_continue_page:
+            self._has_continue_page = False
             return CommentIterator(self.code, self.session, self.rhx,
                     self._section_media,
                     self._info[self._section_media]['page_info']['end_cursor'])
