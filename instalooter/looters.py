@@ -889,8 +889,9 @@ class PostLooter(InstaLooter):
                 comments_queued.extend(nodes)
                 pbar.update(len(nodes))
         except RuntimeError:
-            raise RuntimeError
-            logging.critical("{}: limited query".format(self.code))
+            self._limited = True
+        else:
+            self._limited = False
         finally:
             pbar.finish()
 
@@ -918,6 +919,9 @@ class PostLooter(InstaLooter):
             mode = "w" if six.PY3 else "wb"
             with open(self._fpath, mode) as dest:
                 json.dump(self.info, dest, indent=4, sort_keys=True)
+
+        if self._limited:
+            raise RuntimeError("{}: limite query".format(self.code))
 
         return collected_nodes
 
