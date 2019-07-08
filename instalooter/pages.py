@@ -29,6 +29,8 @@ __all__ = [
     "CommentIterator",
 ]
 
+import logging
+logging.basicConfig(level = logging.INFO)
 
 @six.add_metaclass(abc.ABCMeta)
 class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
@@ -36,16 +38,16 @@ class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
     """
 
     PAGE_SIZE = 50
-    INTERVAL = randint(15, 25)
+    INTERVAL = randint(7, 13)
 
     _BASE_URL = "https://www.instagram.com/graphql/query/"
     _section_generic = NotImplemented    # type: Text
     _section_media = NotImplemented      # type: Text
 
-    def __init__(self, session, rhx):
+    def __init__(self, session, rhx, cursor= None):
         # type: (Session) -> None
         self._finished = False
-        self._cursor = None     # type: Optional[Text]
+        self._cursor = cursor     # type: Optional[Text]
         self._current_page = 0
         self._data_it = iter(self._page_loader(session, rhx))
 
@@ -108,9 +110,9 @@ class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
 
         if not media_info['page_info']['has_next_page']:
             self._finished = True
-        elif not media_info['edges']:
-            self._finished = True
-            raise StopIteration
+        #elif not media_info['edges']:
+        #    self._finished = True
+        #    raise StopIteration
         else:
             self._cursor = media_info['page_info']['end_cursor']
             self._current_page += 1
@@ -128,15 +130,17 @@ class CommentIterator(PageIterator):
     _QUERY_HASH = "97b41c52301f77ce508f55e66d17620e"
     _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
     _section_generic = "shortcode_media"
-    _section_media = "edge_media_to_parent_comment"
-    _first = 12 # the number of displayed comments
+    #_section_media = "edge_media_to_parent_comment"
+    _first = 48 # the number of displayed comments
 
-    def __init__(self, code, session, rhx, section_media):
-        super(CommentIterator, self).__init__(session, rhx)
+    def __init__(self, code, session, rhx, section_media, cursor=None):
+        super(CommentIterator, self).__init__(session, rhx, cursor)
         self.code = code
         self._section_media = section_media
+        logging.debug(self._section_media)
 
     def _getparams(self, cursor):
+        #print(self._first)
         return {
             "shortcode": self.code,
             "first": self._first,
@@ -146,8 +150,11 @@ class CommentIterator(PageIterator):
     def __next__(self):
         data = super(CommentIterator, self).__next__()
         comments = data[self._section_media]['edges']
-        self._first = len(comments)
-        return comments
+        #self._first = len(comments)
+        return {'edges' : comments,
+                'page_info' :
+                    data[self._section_media]['page_info']
+                }
 
     if six.PY2:
         next = __next__

@@ -15,7 +15,6 @@ import time
 import typing
 import warnings
 import os
-import logging
 
 import fs
 import six
@@ -51,6 +50,8 @@ __all__ = [
     "PostLooter",
 ]
 
+import logging
+logging.basicConfig(level = logging.INFO)
 
 @six.add_metaclass(abc.ABCMeta)
 class InstaLooter(object):
@@ -763,9 +764,7 @@ class PostLooter(InstaLooter):
         r'^[0-9a-zA-Z_\-]{10,11}$'
     )
 
-    _section_media = "edge_media_to_parent_comment"
-
-    def __init__(self, code, **kwargs):
+    def __init__(self, code, destination, **kwargs):
         # type: (str, **Any) -> None
         """Create a new hashtag looter.
 
@@ -778,8 +777,6 @@ class PostLooter(InstaLooter):
         """
         super(PostLooter, self).__init__(**kwargs)
 
-        self._info = None   # type: Optional[dict]
-
         match = self._RX_URL.match(code)
         if match is not None:
             self.code = match.group(1)
@@ -789,11 +786,44 @@ class PostLooter(InstaLooter):
             self.code = code
             self._pagenum = 0
 
+        # set a dump file path
+        self._info = None   # type: Optional[dict]
+        self._destination = destination
+        self._fpath = os.path.join(self._destination, '{}.json'.format(self.code))
+
+        # get page info
+        self.info
+        self.section_media
+
+        if self._section_media != 'edge_media_to_parent_comment':
+            raise KeyError("invalid comment section key'{}'".format(code))
+
+    @property
+    def section_media(self):
+        return self._section_media
+
     @property
     def info(self, **kwargs):
-        # type: () -> dict
         if self._info is None:
-            self._info = self.get_post_info(self.code, **kwargs)
+            if os.path.exists(self._fpath):
+                self._continue = True
+                mode = "r" if six.PY3 else "rb"
+                with open(self._fpath, mode) as dest:
+                    self._info = json.load(dest)
+                logging.info("{}: Countinue collecting".format(self.code))
+            # type: () -> dict
+            else:
+                self._continue = False
+                self._info = self.get_post_info(self.code, **kwargs)
+                logging.info("{}: Start collecting".format(self.code))
+
+            # check comment keys
+            try:
+                self._section_media = "edge_media_to_parent_comment"
+                self.info[self._section_media]
+            except KeyError:
+                self._section_media = "edge_media_to_comment"
+
         return self._info
 
     def pages(self):
@@ -820,11 +850,16 @@ class PostLooter(InstaLooter):
         Returns:
             CommentIterator: an iterator over the comments of the instagram post pages.
         """
+        if self._continue and (self._info[self._section_media]['page_info']['has_next_page']):
+            self._continue = False
+            return CommentIterator(self.code, self.session, self.rhx,
+                    self._section_media,
+                    self._info[self._section_media]['page_info']['end_cursor'])
+        else:
+            return CommentIterator(self.code, self.session, self.rhx, self._section_media)
 
-        return CommentIterator(self.code, self.session, self.rhx, self._section_media)
-
-    def comment_download(self, dump_json=True, destination=None):
-
+    def comment_download(self, dump_json=True):
+        '''
         # Check a already collected post
         if destination:
             destination = os.path.join(destination, "{}.json".format(self.code))
@@ -834,42 +869,57 @@ class PostLooter(InstaLooter):
         if os.path.exists(destination):
             logging.warning("Already collected {}".format(self.code))
             return True # no error sign
-
-        # Check comment keys
-        try:
-            total_comment = self.info[self._section_media]['count']
-        except KeyError:
-            self._section_media = "edge_media_to_comment"
-            total_comment = self.info[self._section_media]['count']
+        '''
 
         # Start collect comments
         comments_queued = deque()
         comments_iter = self.comment_pages()
 
+        # Set progree bar
         pbar = TqdmProgressBar(comments_iter, desc=self.code)
-        #pbar.set_maximum(self.info['edge_media_to_parent_comment']['count'] // len(self.info['edge_media_to_parent_comment']['edges']) + 1)
+        total_comment = self._info[self._section_media]['count']
         pbar.set_maximum(total_comment)
+        if self._continue:
+            pbar.update(len(self._info[self._section_media]['edges']))
 
-        for nodes in comments_iter:
-            comments_queued.extend(nodes)
-            pbar.update(len(nodes))
+        try:
+            for data in comments_iter:
+                nodes = data['edges']
+                self._info[self._section_media]['page_info'] = data['page_info']
+                comments_queued.extend(nodes)
+                pbar.update(len(nodes))
+        except RuntimeError:
+            raise RuntimeError
+            logging.critical("{}: limited query".format(self.code))
+        finally:
+            pbar.finish()
 
-        pbar.finish()
+        # if collected post, then merge
+        collected_nodes = []
+        if os.path.exists(self._fpath):
+            collected_nodes.extend(list(comments_queued))
+            if self._info[self._section_media]['edges'] is None:
+                self._info[self._section_media]['edges'] = []
+            collected_nodes.extend(self.info[self._section_media]['edges'])
+        else :
+            collected_nodes = list(comments_queued)
 
+        self._info[self._section_media]['edges'] = collected_nodes
+
+        # collection report
+        logging.info("{0}: Last page info - {1}".format(self.code, self._info[self._section_media]['page_info']))
+        i = 0
+        for node in collected_nodes:
+            i += node['node']['edge_threaded_comments']['count']
+        logging.info("{0}: {1}({2}) / {3}".format(self.code, i + len(collected_nodes), len(collected_nodes), total_comment))
+
+        # save dump
         if dump_json:
-            try:
-                mode = "w" if six.PY3 else "wb"
-                with open(destination, mode) as dest:
-                    self.info[self._section_media]['edges'] = list(comments_queued)
-                    json.dump(self.info, dest, indent=4, sort_keys=True)
-                return True # no error sign
+            mode = "w" if six.PY3 else "wb"
+            with open(self._fpath, mode) as dest:
+                json.dump(self.info, dest, indent=4, sort_keys=True)
 
-            except:
-                os.system("rm {}".format(destination))
-                return False # error sign
-
-        else:
-            return comments_queued
+        return collected_nodes
 
     def medias(self, timeframe=None):
         """Return a generator that yields only the refered post.
