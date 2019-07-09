@@ -790,13 +790,23 @@ class PostLooter(InstaLooter):
         self._info = None   # type: Optional[dict]
         self._destination = destination
         self._fpath = os.path.join(self._destination, '{}.json'.format(self.code))
+        self._continue = os.path.exists(self._fpath)
 
         # get page info
-        self.info
-        self.section_media
+        if 'edge_media_to_parent_comment' in self.info.keys():
+            self._section_media = "edge_media_to_parent_comment"
+        else:
+            self._section_media = "edge_media_to_comment"
 
+        # check section media key
         if self._section_media != 'edge_media_to_parent_comment':
-            raise KeyError("invalid comment section key'{}'".format(code))
+            raise KeyError("{}: invalid comment section key".format(self.code))
+
+        # if you continue collecting, then get last page cursor
+        if self._continue:
+            self._cursor = self._info[self._section_media]['page_info']['end_cursor']
+        else:
+            self._cursor = None
 
     @property
     def section_media(self):
@@ -805,26 +815,16 @@ class PostLooter(InstaLooter):
     @property
     def info(self, **kwargs):
         if self._info is None:
-            if os.path.exists(self._fpath):
-                self._continue = True
+            # Countinue collecting
+            if self._continue:
                 mode = "r" if six.PY3 else "rb"
                 with open(self._fpath, mode) as dest:
                     self._info = json.load(dest)
-                self._has_continue_page = self._info[self._section_media]['page_info']['has_next_page']
-                logging.info("{}: Countinue collecting".format(self.code))
-            # type: () -> dict
+                    logging.info("{}: Countinue collecting".format(self.code))
+            # Start collecting
             else:
-                self._continue = False
-                self._has_continue_page = False
-                self._info = self.get_post_info(self.code, **kwargs)
+                self._info =  self.get_post_info(self.code, **kwargs)
                 logging.info("{}: Start collecting".format(self.code))
-
-            # check comment keys
-            try:
-                self._section_media = "edge_media_to_parent_comment"
-                self.info[self._section_media]
-            except KeyError:
-                self._section_media = "edge_media_to_comment"
 
         return self._info
 
@@ -852,27 +852,10 @@ class PostLooter(InstaLooter):
         Returns:
             CommentIterator: an iterator over the comments of the instagram post pages.
         """
-        if self._has_continue_page:
-            self._has_continue_page = False
-            return CommentIterator(self.code, self.session, self.rhx,
-                    self._section_media,
-                    self._info[self._section_media]['page_info']['end_cursor'])
-        else:
-            return CommentIterator(self.code, self.session, self.rhx, self._section_media)
+        return CommentIterator(
+                self.code, self.session, self.rhx, self._section_media, self._cursor)
 
     def comment_download(self, dump_json=True):
-        '''
-        # Check a already collected post
-        if destination:
-            destination = os.path.join(destination, "{}.json".format(self.code))
-        else:
-            destination = "{}.json".format(self.code)
-
-        if os.path.exists(destination):
-            logging.warning("Already collected {}".format(self.code))
-            return True # no error sign
-        '''
-
         # Start collect comments
         comments_queued = deque()
         comments_iter = self.comment_pages()
@@ -897,9 +880,9 @@ class PostLooter(InstaLooter):
         finally:
             pbar.finish()
 
-        # if collected post, then merge
-        collected_nodes = []
-        if os.path.exists(self._fpath):
+        # if you continue collecting, then merge comment nodes
+        if self._continue:
+            collected_nodes = []
             collected_nodes.extend(list(comments_queued))
             if self._info[self._section_media]['edges'] is None:
                 self._info[self._section_media]['edges'] = []
@@ -909,7 +892,7 @@ class PostLooter(InstaLooter):
 
         self._info[self._section_media]['edges'] = collected_nodes
 
-        # collection report
+        # report collection result
         logging.info("{0}: Last page info - {1}".format(self.code, self._info[self._section_media]['page_info']))
         i = 0
         for node in collected_nodes:
@@ -922,8 +905,9 @@ class PostLooter(InstaLooter):
             with open(self._fpath, mode) as dest:
                 json.dump(self.info, dest, indent=4, sort_keys=True)
 
+        # report limit query
         if self._limited:
-            raise RuntimeError("{}: limite query".format(self.code))
+            raise RuntimeError("{}: limit query".format(self.code))
 
         return collected_nodes
 
