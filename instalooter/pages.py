@@ -38,7 +38,7 @@ class PageIterator(typing.Iterator[typing.Dict[typing.Text, typing.Any]]):
     """
 
     PAGE_SIZE = 50
-    INTERVAL = randint(7, 13)
+    INTERVAL = 3
 
     _BASE_URL = "https://www.instagram.com/graphql/query/"
     _section_generic = NotImplemented    # type: Text
@@ -131,7 +131,7 @@ class CommentIterator(PageIterator):
     _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
     _section_generic = "shortcode_media"
     #_section_media = "edge_media_to_parent_comment"
-    _first = 48 # the number of displayed comments
+    PAGE_SIZE = 50 # the number of displayed comments
 
     def __init__(self, code, session, rhx, section_media, cursor=None):
         super(CommentIterator, self).__init__(session, rhx, cursor)
@@ -140,7 +140,6 @@ class CommentIterator(PageIterator):
         logging.debug(self._section_media)
 
     def _getparams(self, cursor):
-        #print(self._first)
         return {
             "shortcode": self.code,
             "first": self.PAGE_SIZE,
@@ -202,6 +201,7 @@ class ProfileIterator(PageIterator):
     _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
     _section_generic = "user"
     _section_media = "edge_owner_to_timeline_media"
+    PAGE_SIZE = 100
 
     @classmethod
     def _user_data(cls, username, session):
@@ -224,8 +224,9 @@ class ProfileIterator(PageIterator):
                 raise RuntimeError("user '{}' is private".format(username))
         return cls(data['id'], session, user_data.get('rhx_gis', ''))
 
-    def __init__(self, owner_id, session, rhx):
-        super(ProfileIterator, self).__init__(session, rhx)
+    def __init__(self, owner_id, session, rhx, cursor = None):
+
+        super(ProfileIterator, self).__init__(session, rhx, cursor)
         self.owner_id = owner_id
 
     def _getparams(self, cursor):
