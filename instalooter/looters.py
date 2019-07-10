@@ -693,7 +693,9 @@ class ProfileLooter(InstaLooter):
     """A looter targeting medias on a user profile.
     """
 
-    def __init__(self, username, **kwargs):
+    _section_media = "edge_owner_to_timeline_media"
+
+    def __init__(self, username, destination, page_info, **kwargs):
         # type: (str, **Any) -> None
         """Create a new profile looter.
 
@@ -707,6 +709,9 @@ class ProfileLooter(InstaLooter):
         super(ProfileLooter, self).__init__(**kwargs)
         self._username = username
         self._owner_id = None
+        self._destination = destination
+        self._continue = page_info['has_next_page']
+        self._cursor = page_info['end_cursor']
 
     def pages(self):
         # type: () -> ProfileIterator
@@ -723,10 +728,11 @@ class ProfileLooter(InstaLooter):
 
         """
         if self._owner_id is None:
-            it = ProfileIterator.from_username(self._username, self.session)
+            it = ProfileIterator.from_username(self._username, self.session, self._cursor)
             self._owner_id = it.owner_id
             return it
-        return ProfileIterator(self._owner_id, self.session, self.rhx)
+        return ProfileIterator(self._owner_id, self.session, self.rhx, self._cursor)
+
 
 
 class HashtagLooter(InstaLooter):

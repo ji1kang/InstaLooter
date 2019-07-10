@@ -204,7 +204,7 @@ class ProfileIterator(PageIterator):
     PAGE_SIZE = 100
 
     @classmethod
-    def _user_data(cls, username, session):
+    def _user_data(cls, username, session, cursor = None):
         url = "https://www.instagram.com/{}/".format(username)
         try:
             with session.get(url) as res:
@@ -213,7 +213,7 @@ class ProfileIterator(PageIterator):
             raise ValueError("user not found: '{}'".format(username))
 
     @classmethod
-    def from_username(cls, username, session):
+    def from_username(cls, username, session, cursor = None):
         user_data = cls._user_data(username, session)
         if 'ProfilePage' not in user_data['entry_data']:
             raise ValueError("user not found: '{}'".format(username))
@@ -222,7 +222,7 @@ class ProfileIterator(PageIterator):
             con_id = next((c.value for c in session.cookies if c.name == "ds_user_id"), None)
             if con_id != data['id']:
                 raise RuntimeError("user '{}' is private".format(username))
-        return cls(data['id'], session, user_data.get('rhx_gis', ''))
+        return cls(data['id'], session, user_data.get('rhx_gis', ''), cursor)
 
     def __init__(self, owner_id, session, rhx, cursor = None):
 
