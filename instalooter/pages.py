@@ -201,7 +201,6 @@ class ProfileIterator(PageIterator):
     _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
     _section_generic = "user"
     _section_media = "edge_owner_to_timeline_media"
-    PAGE_SIZE = 100
 
     @classmethod
     def _user_data(cls, username, session, cursor = None):
