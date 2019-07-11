@@ -137,7 +137,6 @@ class CommentIterator(PageIterator):
         super(CommentIterator, self).__init__(session, rhx, cursor)
         self.code = code
         self._section_media = section_media
-        logging.debug(self._section_media)
 
     def _getparams(self, cursor):
         return {
@@ -149,7 +148,6 @@ class CommentIterator(PageIterator):
     def __next__(self):
         data = super(CommentIterator, self).__next__()
         comments = data[self._section_media]['edges']
-        #self._first = len(comments)
         return {'edges' : comments,
                 'page_info' :
                     data[self._section_media]['page_info']

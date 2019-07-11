@@ -770,7 +770,7 @@ class PostLooter(InstaLooter):
         r'^[0-9a-zA-Z_\-]{10,11}$'
     )
 
-    def __init__(self, code, destination, **kwargs):
+    def __init__(self, code, page_info, **kwargs):
         # type: (str, **Any) -> None
         """Create a new hashtag looter.
 
@@ -794,25 +794,17 @@ class PostLooter(InstaLooter):
 
         # set a dump file path
         self._info = None   # type: Optional[dict]
-        self._destination = destination
-        self._fpath = os.path.join(self._destination, '{}.json'.format(self.code))
-        self._continue = os.path.exists(self._fpath)
+        self._continue = page_info['has_next_page']
+        self._cursor = page_info['end_cursor']
 
-        # get page info
         if 'edge_media_to_parent_comment' in self.info.keys():
             self._section_media = "edge_media_to_parent_comment"
         else:
             self._section_media = "edge_media_to_comment"
 
         # check section media key
-        if self._section_media != 'edge_media_to_parent_comment':
-            raise KeyError("{}: invalid comment section key".format(self.code))
-
-        # if you continue collecting, then get last page cursor
-        if self._continue:
-            self._cursor = self._info[self._section_media]['page_info']['end_cursor']
-        else:
-            self._cursor = None
+        #if self._section_media != 'edge_media_to_parent_comment':
+        #    raise KeyError("{}: invalid comment section key".format(self.code))
 
     @property
     def section_media(self):
@@ -823,14 +815,12 @@ class PostLooter(InstaLooter):
         if self._info is None:
             # Countinue collecting
             if self._continue:
-                mode = "r" if six.PY3 else "rb"
-                with open(self._fpath, mode) as dest:
-                    self._info = json.load(dest)
-                    logging.info("{}: Countinue collecting".format(self.code))
+                logging.info("{}: Countinue collecting".format(self.code))
             # Start collecting
             else:
-                self._info =  self.get_post_info(self.code, **kwargs)
                 logging.info("{}: Start collecting".format(self.code))
+
+            self._info =  self.get_post_info(self.code, **kwargs)
 
         return self._info
 
@@ -860,62 +850,6 @@ class PostLooter(InstaLooter):
         """
         return CommentIterator(
                 self.code, self.session, self.rhx, self._section_media, self._cursor)
-
-    def comment_download(self, dump_json=True):
-        # Start collect comments
-        comments_queued = deque()
-        comments_iter = self.comment_pages()
-
-        # Set progree bar
-        pbar = TqdmProgressBar(comments_iter, desc=self.code)
-        total_comment = self._info[self._section_media]['count']
-        pbar.set_maximum(total_comment)
-        if self._continue:
-            pbar.update(len(self._info[self._section_media]['edges']))
-
-        try:
-            for data in comments_iter:
-                nodes = data['edges']
-                self._info[self._section_media]['page_info'] = data['page_info']
-                comments_queued.extend(nodes)
-                pbar.update(len(nodes))
-        except RuntimeError:
-            self._limited = True
-        else:
-            self._limited = False
-        finally:
-            pbar.finish()
-
-        # if you continue collecting, then merge comment nodes
-        if self._continue:
-            collected_nodes = []
-            collected_nodes.extend(list(comments_queued))
-            if self._info[self._section_media]['edges'] is None:
-                self._info[self._section_media]['edges'] = []
-            collected_nodes.extend(self.info[self._section_media]['edges'])
-        else :
-            collected_nodes = list(comments_queued)
-
-        self._info[self._section_media]['edges'] = collected_nodes
-
-        # report collection result
-        logging.info("{0}: Last page info - {1}".format(self.code, self._info[self._section_media]['page_info']))
-        i = 0
-        for node in collected_nodes:
-            i += node['node']['edge_threaded_comments']['count']
-        logging.info("{0}: {1}({2}) / {3}".format(self.code, i + len(collected_nodes), len(collected_nodes), total_comment))
-
-        # save dump
-        if dump_json:
-            mode = "w" if six.PY3 else "wb"
-            with open(self._fpath, mode) as dest:
-                json.dump(self.info, dest, indent=4, sort_keys=True)
-
-        # report limit query
-        if self._limited:
-            raise RuntimeError("{}: limit query".format(self.code))
-
-        return collected_nodes
 
     def medias(self, timeframe=None):
         """Return a generator that yields only the refered post.
