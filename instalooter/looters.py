@@ -72,10 +72,11 @@ class InstaLooter(object):
         """str: the user agent of the default web browser.
         """
         if not cls._cachefs.isfile(cls._USERAGENT_FILE):
-            ua = get_user_agent(cache=cls._cachefs.getsyspath(cls._USERAGENT_FILE))
-            if ua is None:
-                warnings.warn("Could not detect user agent, using default")
-                ua = "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0"
+            ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:68.0) Gecko/20100101 Firefox/68.0"
+            # ua = get_user_agent(cache=cls._cachefs.getsyspath(cls._USERAGENT_FILE))
+            # if ua is None:
+            #    warnings.warn("Could not detect user agent, using default")
+            #    ua = "Mozilla/5.0 (X11; Linux x86_64; rv:66.0) Gecko/20100101 Firefox/66.0"
             with cls._cachefs.open("user-agent.txt", "w") as f:
                 f.write(ua)
         with cls._cachefs.open(cls._USERAGENT_FILE) as f:
