@@ -28,7 +28,7 @@ from ._impl import length_hint, json
 from ._uadetect import get_user_agent
 from ._utils import NameGenerator, CachedClassProperty, get_shared_data
 from .medias import TimedMediasIterator, MediasIterator
-from .pages import ProfileIterator, HashtagIterator, CommentIterator
+from .pages import ProfileIterator, HashtagIterator, CommentIterator, LikeIterator
 from .pbar import ProgressBar, TqdmProgressBar
 from .worker import InstaDownloader
 
@@ -847,10 +847,20 @@ class PostLooter(InstaLooter):
         """Obtain a comment iterator over Instagram post pages.
 
         Returns:
-            CommentIterator: an iterator over the comments of the instagram post pages.
+            CommentIterator: an iterator over the comments of the Instagram post pages.
         """
         return CommentIterator(
                 self.code, self.session, self.rhx, self._section_media, self._cursor)
+
+    def like_pages(self):
+        # type: () -> LikeIterator
+        """Obtain a like iterator over Instagram post pages.
+
+        Returns:
+            LiLikeIterator: an iterator over the comments of the Instagram post pages.
+        """
+        return LikeIterator(
+                self.code, self.session, self.rhx, self._cursor)
 
     def medias(self, timeframe=None):
         """Return a generator that yields only the refered post.

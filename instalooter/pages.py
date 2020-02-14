@@ -157,6 +157,41 @@ class CommentIterator(PageIterator):
         next = __next__
 
 
+class LikeIterator(PageIterator):
+    """An iterator over the users who likes the given post.
+    :url: https://www.instagram.com/graphql/query/?query_hash=d5d763b1e2acf209d62d22d184488e57&variables=%7B%22shortcode%22%3A%22B7ZFP1Phhx4%22%2C%22include_reel%22%3Atrue%2C%22first%22%3A24%7D
+    """
+
+    _QUERY_HASH = "d5d763b1e2acf209d62d22d184488e57"
+    _URL = "{}?query_hash={}&variables={{}}".format(PageIterator._BASE_URL, _QUERY_HASH)
+    _section_generic = "shortcode_media"
+    _section_media = "edge_liked_by"
+    PAGE_SIZE = 50 # the number of displayed comments
+
+    def __init__(self, code, session, rhx, cursor=None):
+        super(LikeIterator, self).__init__(session, rhx, cursor)
+        self.code = code
+
+    def _getparams(self, cursor):
+        return {
+            "shortcode": self.code,
+            "include_reel": False,
+            "first": self.PAGE_SIZE,
+            "after": cursor
+        }
+
+    def __next__(self):
+        data = super(LikeIterator, self).__next__()
+        likes = data[self._section_media]['edges']
+        return {'edges' : likes,
+                'page_info':
+                    data[self._section_media]['page_info']
+                }
+
+    if six.PY2:
+        next = __next__
+
+
 class HashtagIterator(PageIterator):
     """An iterator over the pages refering to a specific hashtag.
     """
